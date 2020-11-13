@@ -1,0 +1,66 @@
+---
+title: "Clustering Experiments"
+output: html_notebook
+---
+
+```{r}
+library("topicvis")
+```
+
+First, simulate from schemes -- true clusters and gradient -- in two dimensions.
+
+```{r}
+n <- 400
+mu0 <- c(0, 0)
+mu1 <- c(5, 5)
+x <- list()
+x$smooth <- simulate_gradient(n, mu0, mu1)
+plot(x$smooth)
+plot(hclust(dist(x$smooth)))
+```
+
+```{r}
+mus <-  matrix(rnorm(10, sd = 10), ncol = 2)
+x$cluster <- simulate_cluster(n, mus)
+plot(x$cluster)
+plot(hclust(dist(x$cluster)))
+```
+
+```{r}
+links <- list(
+  "cluster" = linked_cluster_data(x$cluster),
+  "smooth" = linked_cluster_data(x$smooth)
+)
+plot_clusters(links$cluster)
+plot_clusters(links$smooth)
+```
+
+```{r}
+ggplot(transition_data(links$cluster$links)) +
+  geom_tile(
+    aes(x = cluster_child, y = cluster_parent, fill = count)
+  ) +
+  scale_fill_viridis_b() +
+  facet_wrap(~K_parent, scale = "free")
+
+ggplot(transition_data(links$smooth$links)) +
+  geom_tile(
+    aes(x = cluster_child, y = cluster_parent, fill = count)
+  ) +
+  scale_fill_viridis_b() +
+  facet_wrap(~K_parent, scale = "free")
+```
+
+```{r}
+ggplot(links$cluster$centroids) +
+  geom_point(data = data.frame(x$cluster), aes(x = X1, y = X2), size = 0.2) +
+  geom_point(aes(x = X1, y = X2), col = "red", size = 1) +
+  coord_fixed() +
+  facet_wrap(~K)
+
+ggplot(links$smooth$centroids) +
+  geom_point(data = data.frame(x$smooth), aes(x = X1, y = X2), size = 0.2) +
+  geom_point(aes(x = X1, y = X2), col = "red", size = 1) +
+  coord_fixed() +
+  facet_wrap(~K)
+```

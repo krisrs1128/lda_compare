@@ -1,0 +1,90 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library("dplyr")
+library("ggplot2")
+library("glmnet")
+library("FactoMineR")
+library("topicvis")
+theme_set(theme_bw())
+```
+
+
+```{r}
+x <- matrix(rnorm(1000, 1), ncol = 1)
+hist(x)
+```
+
+```{r}
+rsp <- resampling_plans(nrow(x))
+sampling_coords <- CA(rsp$P, graph = FALSE)$row$coord %>%
+  data.frame() %>%
+  mutate(theta_stars = bootstrap(x, rsp$ix, mean))
+```
+
+
+```{r}
+ggplot(sampling_coords) +
+  geom_point(
+    aes(x = Dim.1, y = Dim.2, col = theta_stars),
+     alpha = 0.9, size = 0.5
+    ) +
+  coord_fixed()
+```
+
+```{r}
+x[1, ] <- 100
+x[2, ] <- 10
+x[3, ] <- 10
+rsp <- resampling_plans(nrow(x))
+sampling_coords <- CA(rsp$P, graph = FALSE)$row$coord %>%
+  data.frame() %>%
+  mutate(theta_stars = bootstrap(x, rsp$ix, mean))
+ggplot(sampling_coords) +
+  geom_point(
+    aes(x = Dim.1, y = Dim.2, col = theta_stars),
+     alpha = 0.9, size = 0.5
+    ) +
+  coord_fixed()
+```
+
+```{r}
+fit <- glmnet(rsp$P, sampling_coords$theta_star)
+beta_hat <- fit$beta[, 2 * ncol(fit$beta) / 3]
+
+P_sub <- rsp$P[, abs(beta_hat) > 0]
+P_sub <- P_sub / rowSums(P_sub)
+pca_fit <- CA(P_sub, graph = FALSE)
+
+pca_coords <- pca_fit$row$coord %>%
+  data.frame() %>%
+  mutate(theta_star = sampling_coords$theta_stars)
+```
+
+```{r}
+ggplot(pca_coords) +
+  geom_point(aes(x = Dim.1, y= Dim.2, col = theta_star)) +
+  geom_text(data = data.frame(v = rownames(pca_fit$col$coord), 3 * pca_fit$col$coord), aes(label = v, x = Dim.1, y= Dim.2), col = "red") +
+  scale_color_viridis_c()
+```
+
+```{r}
+theta_P <- data.frame(
+  P = rsp$P,
+  theta_star = sampling_coords$theta_star
+)
+
+ggplot(theta_P) +
+  geom_point(
+    aes(x = P.1, y = theta_star),
+    position = position_jitter(width = 0.0001)
+  )
+
+ggplot(theta_P) +
+  geom_point(
+    aes(x = P.2, y = theta_star),
+    position = position_jitter(width = 0.0001)
+  )
+```

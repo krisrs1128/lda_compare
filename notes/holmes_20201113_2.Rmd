@@ -1,0 +1,86 @@
+---
+title: "Topics Comparisons"
+output: html_notebook
+---
+
+```{r}
+library("MCMCpack")
+library("dplyr")
+library("ggplot2")
+library("reshape2")
+library("rstan")
+library("tidytext")
+library("FactoMineR")
+library("topicmodels")
+library("topicvis")
+theme_set(theme_bw())
+```
+
+```{r}
+n <- 100
+x <- list()
+betas <- rdirichlet(4, alpha = rep(1, 250))
+x$gradient <- simulate_topics(n, betas, alpha_theta=1)
+x$topics <- simulate_topics(n, betas)
+```
+
+```{r}
+lda_results <- list(
+  "gradient" = fit_ldas(x$gradient, seq(2, 6, 2)),
+  "topics" = fit_ldas(x$topics, seq(2, 6, 2))
+)
+```
+
+```{r}
+ggplot(lda_results$gradient$thetas %>%
+  filter(document %in% 1:10)) +
+  geom_point(aes(x = topic, y = K, size = gamma)) +
+  facet_wrap(~document)
+
+ggplot(lda_results$topics$thetas %>%
+  filter(document %in% 1:10)) +
+  geom_point(aes(x = topic, y = K, size = gamma)) +
+  facet_wrap(~document)
+```
+
+```{r}
+beta_mat <- lda_results$gradient$betas %>%
+  dcast(K + topic ~ term, value.var = "beta")
+
+ca_data <- x$gradient / rowSums(x$gradient)
+beta_mat <- beta_mat[, c("K", "topic", seq(1, ncol(betas)))]
+
+beta_ca <- beta_mat %>%
+  select(-K, -topic) %>%
+  as.matrix()
+
+combined_ca <- data.frame(rbind(beta_ca, betas, ca_data)) %>%
+  mutate(
+    type = c(rep("beta_hat", nrow(beta_ca)), rep("beta", nrow(betas)), rep("doc", nrow(ca_data))),
+    K = c(beta_mat$K, rep(nrow(betas), nrow(betas)), rep(NA, nrow(ca_data))),
+    topic = c(beta_mat$topic, seq_len(nrow(betas)), rep(NA, nrow(ca_data)))
+  )
+
+combined_mat <- combined_ca %>%
+  select(-type, -K, -topic)
+ca_result <- CA(combined_mat, graph = FALSE)
+combined_coord <- cbind(combined_ca[, c("type", "K", "topic")], ca_result$row$coord)
+
+ggplot() +
+  geom_point(
+    data = combined_coord %>% filter(type == "doc"),
+    aes(x = `Dim 1`, y = `Dim 2`)
+  ) +
+  geom_point(
+    data = combined_coord %>% filter(type == "beta_hat"),
+    aes(x = `Dim 1`, y = `Dim 2`, col = K),
+    size = 2
+  ) +
+  geom_point(
+    data = combined_coord %>% filter(type == "beta"),
+    aes(x = `Dim 1`, y = `Dim 2`, col = K),
+    size = 2, col = "red"
+  ) +
+  coord_fixed()
+```
+
