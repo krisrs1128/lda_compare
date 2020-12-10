@@ -1,0 +1,131 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
+```
+
+```{r}
+library("FactoMineR")
+library("MCMCpack")
+library("purrr")
+library("dplyr")
+library("ggplot2")
+library("glmnet")
+library("reshape2")
+library("topicvis")
+theme_set(theme_bw())
+```
+
+
+
+```{r}
+n <- 200
+betas <- rdirichlet(10, alpha = rep(1, 250))
+x <- list("topics" = simulate_topics(n, betas))
+```
+
+```{r}
+Ks <- c(5, 5)
+#lda_results <- list("topics" = fit_ldas(x$topics, Ks, alpha_theta=0.1))
+lda_results <- list("topics" = fit_lda_alphas(x$topics, Ks[1], alpha_thetas=c(0.01, 10)))
+```
+
+```{r}
+theta_split <- lda_results$topics$thetas %>%
+  split(.$alpha_theta) %>%
+  map(~ dcast(.x, alpha_theta + document ~ topic, value.var = "gamma"))
+topic_weights <- theta_split %>%
+  map(~ .x %>% dplyr::select(-alpha_theta, -document)) %>%
+  map(colSums)
+```
+
+```{r}
+beta_hat <- lda_results$topics$betas %>%
+  dcast(alpha_theta + topic ~ term, value.var = "beta") %>%
+  dplyr::select(-starts_with("K"))
+```
+
+```{r}
+colnames(betas) <- seq_len(ncol(betas))
+colnames(x$topics) <- seq_len(ncol(betas))
+input_data <- ca_input(beta_hat, betas, x$topics)
+output_data <- ca_output(input_data$matrix, input_data$meta)
+output_data$alpha_theta <- 0
+output_data[1:nrow(beta_hat), "alpha_theta"] <- beta_hat$alpha_theta
+```
+
+```{r}
+beta_mats <- beta_hat %>%
+  split(.$alpha_theta) %>%
+  map( ~ .x %>% dplyr::select(-topic, -alpha_theta)) %>%
+  map(~ as.matrix(.x))
+```
+
+```{r}
+library("reticulate")
+library("tidyr")
+ot <- import("ot")
+M <- ot$dist(beta_mats[[1]], beta_mats[[2]])
+sink_res <- ot$sinkhorn(topic_weights[[1]], topic_weights[[2]], M, 0.01)
+rownames(sink_res) <- paste(0.01, 1:nrow(sink_res), sep = "_")
+colnames(sink_res) <- paste(10, 1:ncol(sink_res), sep = "_")
+sink_res <- melt(sink_res, varnames = c("source", "target"), value.name = "weight")
+sink_res
+```
+
+```{r}
+output_data2 <- output_data
+output_data2$ix[1:sum(Ks)] <- c(1:Ks[1], 1:Ks[2])
+output_data2 <- output_data2 %>%
+  unite(kix, c("alpha_theta", "ix"))
+
+output_data2
+
+sink_res <- sink_res %>%
+  left_join(output_data2, by = c("source" = "kix")) %>%
+  dplyr::select(source, target, weight, `Dim 1`, `Dim 2`) %>%
+  rename("d1_1" = `Dim 1`, "d2_1" = `Dim 2`) %>%
+  left_join(output_data2, by = c("target" = "kix")) %>%
+  dplyr::select(source, target, weight, d1_1, d2_1, `Dim 1`, `Dim 2`) %>%
+  rename("d1_2" = `Dim 1`, "d2_2" = `Dim 2`)
+
+sink_res
+```
+
+```{r}
+topic_weights
+output_data$topic_weight <- 0
+output_data$topic_weight[1:sum(Ks)] <- unlist(topic_weights)
+```
+
+```{r}
+ggplot() +
+  geom_segment(
+    data = sink_res,
+    aes(x = d1_1, y = d2_1, xend = d1_2, yend = d2_2, size = weight, alpha = weight),
+    col = "grey", arrow = arrow(length = unit(0.3, "cm"))
+  ) +
+  geom_point(
+    data = output_data %>% filter(type == "x"),
+    aes(x = `Dim 1`, y = `Dim 2`),
+    size = 1
+  ) +
+  geom_point(
+    data = output_data %>% filter(type == "beta_hat"),
+    aes(x = `Dim 1`, y = `Dim 2`, col = as.factor(alpha_theta), size = topic_weight)
+  ) +
+  geom_point(
+    data = output_data %>% filter(type == "beta_true"),
+    aes(x = `Dim 1`, y = `Dim 2`),
+    size = 2, col = "red", shape = 2
+  ) +
+  labs(x = "D1", y = "D2", col = expression(alpha)) +
+  scale_size(range = c(0.05, 4), guide = FALSE) +
+  scale_alpha(range = c(0.05, 1), guide = FALSE) +
+  scale_color_brewer(palette = "Set2") +
+  coord_fixed()
+ggsave(sprintf("transport-alphas-%s.png", paste0(Ks, collapse="_")))
+```
