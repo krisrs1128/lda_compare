@@ -1,6 +1,6 @@
 #' Utilities for Clustering Demo
 
-
+#' @export
 simulate_gradient <- function(n, mu0, mu1) {
   x <- matrix(nrow = n, ncol = length(mu0))
   
@@ -14,6 +14,7 @@ simulate_gradient <- function(n, mu0, mu1) {
 }
 
 
+#' @export
 simulate_cluster <- function(n, mus) {
   x <- matrix(nrow = n, ncol = length(mu0))
   K <- nrow(mus)
@@ -26,6 +27,7 @@ simulate_cluster <- function(n, mus) {
 }
 
 
+#' @export
 kmeans_df <- function(x, K = 1) {
   cluster_result <- kmeans(x, center = K)
   ix <- data.frame(
@@ -41,6 +43,8 @@ kmeans_df <- function(x, K = 1) {
   list(ix = ix, centroids = centroids)
 }
 
+
+#' @export
 get_links <- function(cluster1, cluster2) {
   n <- nrow(cluster1)
   result <- list()
@@ -58,6 +62,8 @@ get_links <- function(cluster1, cluster2) {
   do.call(rbind, result)
 }
 
+
+#' @export
 linked_cluster_data <- function(x, Ks = seq(2, 8)) {
   k_groups <- list()
   centroids <- list()
@@ -82,6 +88,7 @@ linked_cluster_data <- function(x, Ks = seq(2, 8)) {
 }
 
 
+#' @export
 plot_clusters <- function(cluster_df) {
   ggplot(cluster_df$groups) +
     geom_point(aes(x = cluster, y = K)) +
@@ -90,6 +97,7 @@ plot_clusters <- function(cluster_df) {
 }
 
 
+#' @export
 transition_data <- function(links) {
   links %>%
     mutate(

@@ -1,6 +1,7 @@
 #' Functions to support bootstrapping
  
-resampling_plans <- function(n, B = 500) {
+#' @export
+resampling_plans <- function(n, B = 2000) {
   P <- matrix(0, nrow = B, ncol = n)
   colnames(P) <- seq_len(n)
   ix <- matrix(0, nrow = B, ncol = n)
@@ -14,6 +15,8 @@ resampling_plans <- function(n, B = 500) {
   list(P = P, ix = ix)
 }
 
+
+#' @export
 bootstrap <- function(x, ix, theta_fun) {
   B <- nrow(ix)
   theta_star <- vector(length = B)
